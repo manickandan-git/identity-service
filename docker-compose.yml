@@ -1,0 +1,44 @@
+services:
+  identity-service:
+    build: .
+    container_name: marketplace-identity-service
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://marketplace:marketplace@postgres:5432/marketplace_identity
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8001:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./app:/app/app
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: marketplace-postgres
+    environment:
+      POSTGRES_USER: marketplace
+      POSTGRES_PASSWORD: marketplace
+      POSTGRES_DB: marketplace_identity
+    ports:
+      - "5433:5432"
+    volumes:
+      - marketplace_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marketplace -d marketplace_identity"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: marketplace-redis
+    ports:
+      - "6380:6379"
+
+volumes:
+  marketplace_postgres_data:
