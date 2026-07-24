@@ -15,12 +15,34 @@ down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-user_role = postgresql.ENUM("BUYER", "SELLER", "ADMIN", name="userrole", create_type=False)
+def get_user_role_type(dialect_name: str) -> sa.types.TypeEngine:
+    if dialect_name == "postgresql":
+        return postgresql.ENUM(
+            "BUYER",
+            "SELLER",
+            "ADMIN",
+            name="userrole",
+            create_type=False,
+        )
+
+    # SQLite and other non-PostgreSQL dialects use a CHECK-constrained string.
+    return sa.Enum(
+        "BUYER",
+        "SELLER",
+        "ADMIN",
+        name="userrole",
+        native_enum=False,
+        create_constraint=True,
+    )
 
 
 def upgrade() -> None:
     bind = op.get_bind()
-    user_role.create(bind, checkfirst=True)
+    dialect_name = bind.dialect.name
+    user_role = get_user_role_type(dialect_name)
+
+    if dialect_name == "postgresql":
+        user_role.create(bind, checkfirst=True)
 
     op.create_table(
         "users",
@@ -81,8 +103,19 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    dialect_name = bind.dialect.name
+
     op.drop_table("password_reset_tokens")
     op.drop_table("refresh_tokens")
     op.drop_table("verification_tokens")
     op.drop_table("users")
-    user_role.drop(op.get_bind(), checkfirst=True)
+
+    if dialect_name == "postgresql":
+        postgresql.ENUM(
+            "BUYER",
+            "SELLER",
+            "ADMIN",
+            name="userrole",
+            create_type=False,
+        ).drop(bind, checkfirst=True)
